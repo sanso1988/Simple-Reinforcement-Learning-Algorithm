@@ -16,7 +16,7 @@ This repository are focusing on implementing classical Reinforcement Learning al
 ## Already Implementation
 ### Deep Q-Learning
 ---
-1. Algorithm refers to Playing Atari with Deep Reinforcement Learning[1].
+1. Algorithm refers to Playing Atari with Deep Reinforcement Learning [1].
 
 2. Arguments:
 - Enviroment: ALE/Pong-v5. You can try others.
