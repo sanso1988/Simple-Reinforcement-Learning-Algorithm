@@ -1,6 +1,7 @@
 # Reinforcement-Learning-Algorithm-Script
 This repository is only for studying Reinforcement Learning.
 This repository are focusing on implementing classical Reinforcement Learning algorithms. The code is created as simple as possible.
+If you find anything wrong, don't hesitate to comment. I am very happy to correct it.
 
 ## Requirements
 - **gym**
@@ -11,7 +12,8 @@ This repository are focusing on implementing classical Reinforcement Learning al
 - **matplotlib**
 
 
-**Run like this**: ***python3 main.py --train 1***
+## Usage
+python3 main.py --train 1
 
 ## Already Implementation
 ### Deep Q-Learning
