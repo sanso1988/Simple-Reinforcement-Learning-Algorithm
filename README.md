@@ -1,4 +1,4 @@
-# Reinforcement-Learning-Algorithm-Script
+# Reinforcement-Learning-Algorithm
 This repository is only for studying Reinforcement Learning.
 This repository are focusing on implementing classical Reinforcement Learning algorithms. The code is created as simple as possible.
 If you find anything wrong, don't hesitate to comment. I am very happy to correct it.
