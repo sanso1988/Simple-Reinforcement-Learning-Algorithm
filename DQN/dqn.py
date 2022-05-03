@@ -9,10 +9,11 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.autograd as autograd 
+import torch.autograd as autograd
 
 import gym
 import collections
+import Environment.Env as Env
 
 class Utility():
 	def __init__(self, args):
@@ -57,9 +58,10 @@ class ExpReplay():
 		return len(self.memory)
 
 class DQNAgent(nn.Module):
-	def __init__(self, action_size, stack_frame):
+	def __init__(self, action_size, stack_frame, start_action):
 		super(DQNAgent, self).__init__()
 		self.action_size = action_size
+		self.start_action = start_action
 
 		self.layers = nn.Sequential(
 			nn.Conv2d(stack_frame, 32, 8, stride=4),
@@ -77,21 +79,25 @@ class DQNAgent(nn.Module):
 	def forward(self, x):
 		return self.layers(x)
 
-	def act(self, state, epsilon):
+	def act(self, state, epsilon, evaluate=False):
 		if random.random() > epsilon:
 			predq = self.layers(state)
 			action = predq[0].argmax().item()
 		else:
-			action = random.randint(0, self.action_size - 1)
+			action = random.randint(0, self.action_size - 1) if not evaluate else self.start_action
 		return action
 
 class TrainAgent():
 	def __init__(self, args):
 		self.device = args.device
-		self.env = gym.make(args.env_name)
-		self.agent = DQNAgent(self.env.action_space.n, args.stack_frame).to(self.device)
-		self.target_agent = DQNAgent(self.env.action_space.n, args.stack_frame).to(self.device)
+		self.env = Env.Wrapped_Env(args)
+		self.agent = DQNAgent(self.env.action_space.n, args.stack_frame, args.start_action
+			).to(self.device)
+		self.target_agent = DQNAgent(self.env.action_space.n, args.stack_frame, args.start_action
+			).to(self.device)
 		self.exp = ExpReplay(args.exp_capacity)
+		self.doubleQ = args.doubleQ
+		self.start_action = args.start_action
 		# Training Parameters
 		self.episode_training = args.episode_training
 		self.gamma = 0.99
@@ -105,7 +111,7 @@ class TrainAgent():
 		self.update_target_agent = args.update_target_agent
 		# Loss & Optimize
 		self.optimizer = optim.RMSprop(
-			self.agent.parameters(), lr=0.00025, alpha=0.95, momentum=0.95, eps=1e-2)
+			self.agent.parameters(), lr=0.00001, alpha=0.95, momentum=0.95)
 		self.loss = nn.HuberLoss()
 		# Record Steps
 		self.steps = 0
@@ -115,6 +121,15 @@ class TrainAgent():
 		self.model_path = 'trained_model/' + args.pretrained_agent
 		# Prepare LogFile
 		self._log('eposide,reward,step\n', 'train_eposide_reward.txt', False)
+		# pretained model path
+		self.path = 'trained_model/' + args.pretrained_agent
+		if args.load_pretrained_agent == 1:
+			self._load_agent()
+
+	def _load_agent(self):
+		print('pretrained model load...')
+		self.agent.load_state_dict(torch.load(self.path, map_location=self.device))
+		self.target_agent.load_state_dict(torch.load(self.path, map_location=self.device))
 
 	def _log(self, info, filename='train_eposide_reward.txt', is_append=True):
 		if is_append:
@@ -137,14 +152,17 @@ class TrainAgent():
 
 				# if frames is not enough to make decision
 				if len(state[0]) < self.stack_frame:
-					obs, reward, done, _ = self.env.step(0)
+					obs, reward, done, info = self.env.step(self.start_action)
 				else:
 					# interaction with environment. state normalization is very important
-					action = self.agent.act(state / 255.0, self.epsilon)
-					obs, reward, done, _ = self.env.step(action)
+					if info['done']:
+						action = self.start_action
+					else:
+						action = self.agent.act(state / 255.0, self.epsilon)
+					obs, reward, done, info = self.env.step(action)
 
 					# store experience
-					self.exp.push(state, action, reward, self.utility._update_state(obs, state), done)
+					self.exp.push(state, action, info['reward'], self.utility._update_state(obs, state), info['done'])
 					self.steps += 1
 					episode_reward += reward
 
@@ -173,11 +191,19 @@ class TrainAgent():
 		states = torch.cat(states).float() / 255.0
 		next_states = torch.cat(next_states).float() / 255.0
 		# calculate target_q = reward + discount * q_star
-		target_q = (
-			torch.tensor(rewards, dtype=torch.float32).to(self.device) + 
-			self.gamma * self.target_agent(next_states).max(1)[0] * 
-			(1 - torch.tensor(dones, dtype=torch.float32)).to(self.device)
-			)
+		if self.doubleQ == 0:
+			target_q = (
+				torch.tensor(rewards, dtype=torch.float32).to(self.device) + 
+				self.gamma * self.target_agent(next_states).max(1)[0] * 
+				(1 - torch.tensor(dones, dtype=torch.float32)).to(self.device)
+				)
+		else:
+			target_q = (
+				torch.tensor(rewards, dtype=torch.float32).to(self.device) + 
+				self.gamma * self.target_agent(next_states).gather(1, 
+				self.agent(next_states).max(1)[1].unsqueeze(1)).squeeze() *
+				(1 - torch.tensor(dones, dtype=torch.float32)).to(self.device)
+				)
 		target_q = target_q.detach()
 		# calculate q(s,a): select the action value from agent on states
 		q = self.agent(states).gather(1, torch.tensor(actions).unsqueeze(1).to(self.device)).squeeze()
@@ -197,27 +223,23 @@ class EvaluateAgent():
 	def __init__(self, args):
 		self.device = args.device
 		self.path = 'trained_model/' + args.pretrained_agent
-		self.env = gym.make(args.env_name, render_mode='human')
-		self.agent = DQNAgent(self.env.action_space.n, args.stack_frame).to(self.device)
+		self.env = Env.Wrapped_Env(args, render=True)
+		self.agent = DQNAgent(self.env.action_space.n, args.stack_frame, args.start_action
+			).to(self.device)
 		self.utility = Utility(args)
 		self.stack_frame = args.stack_frame
+		self.start_action = args.start_action
 		
 	def evaluate(self):
 		self.agent.load_state_dict(torch.load(self.path, map_location=self.device))
 
-		# begin evaluation
-		obs, done, state, episode_reward = self.env.reset(), False, torch.tensor([]), 0
+		# begin to evaluate
+		obs, done, state = self.env.reset(), False, torch.tensor([])
 		while not done:
 			state = self.utility._update_state(obs, state)
 			if len(state[0]) < self.stack_frame:
-				obs, reward, done, _ = self.env.step(0)
+				obs, reward, done, _ = self.env.step(self.start_action)
 			else:
-				# state narmalization is very import
-				action_value = self.agent(state.float() / 255.0).squeeze(0).tolist()
-				info = ''
-				for action, value in enumerate(action_value):
-					info += 'Button ' + str(action) + ':' + str(round(value,2)) + ', ' 
-				print(info)
-				action = self.agent.act(state.float() / 255.0, 0)
-				obs, reward, done, _ = self.env.step(action)
-
+				# state normalization is very important
+				action = self.agent.act(state.float() / 255.0, 0.01, evaluate=True)
+				obs, reward, done, info = self.env.step(action)
