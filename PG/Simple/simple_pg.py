@@ -58,7 +58,7 @@ class TrainAgent():
 			self.env.observation_space.shape[0],
 			self.env.action_space.n,
 			args.start_action).to(self.device)
-		self.batch_size = 12
+		self.batch_size = 32
 		self.eposide_i = 0
 		self.step = 0
 		self.eposide_training = args.eposide_training
@@ -105,7 +105,8 @@ class TrainAgent():
 			eposide_reward += reward
 
 			if done:
-				record['eposide_reward'] += [eposide_reward] * (
+				# make cumulative reward (weight) to be smaller for optimization.
+				record['eposide_reward'] += [eposide_reward / 500] * (
 					len(record['state']) - len(record['eposide_reward']))
 				eposide_n += 1
 				self.eposide_i += 1
@@ -124,7 +125,7 @@ class TrainAgent():
 		weights = torch.tensor(record['eposide_reward']).unsqueeze(0
 			).float().to(self.device)
 		logprob = self.agent.log_likelihood(states, actions)
-		logprob_weight_average = -(logprob * weights).sum() / eposide_n 
+		logprob_weight_average = -(logprob * weights).sum() / eposide_n
 		self.optimizer.zero_grad()
 		logprob_weight_average.backward()
 		self.optimizer.step()

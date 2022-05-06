@@ -12,7 +12,7 @@ def parse():
     parser = argparse.ArgumentParser(description='Reinforcement Learning Arguments')
 
     # environment settting
-    parser.add_argument('--env_name', default='CartPole-v0', help='environment name')
+    parser.add_argument('--env_name', default='CartPole-v1', help='environment name')
     parser.add_argument('--start_action', default=1, type=int, help='action to start game')
     parser.add_argument('--lost_life_done', default=0, type=int, help='lost life sets termial state')
     # algorithm & train
