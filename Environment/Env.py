@@ -15,6 +15,7 @@ class Wrapped_Env():
 		self.lost_life_done = args.lost_life_done
 		self.lives = 0
 		self.action_space = self.env.action_space
+		self.observation_space = self.env.observation_space
 
 	def reset(self):
 		obs = self.env.reset()
@@ -30,6 +31,9 @@ class Wrapped_Env():
 				info['done'] = True
 			self.lives = info['lives']
 		return obs, reward, done, info
+
+	def render(self):
+		self.env.render()
 		
 	def _clip(self, reward):
 		if reward > 1:
