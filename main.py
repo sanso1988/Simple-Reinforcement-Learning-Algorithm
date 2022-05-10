@@ -4,6 +4,7 @@ import torch
 import gym
 import DQN.dqn as dqn
 import PG.Simple.simple_pg as spg
+import PG.Vanilla.vanilla_policy_gradient as vpg
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -16,7 +17,7 @@ def parse():
     parser.add_argument('--start_action', default=1, type=int, help='action to start game')
     parser.add_argument('--lost_life_done', default=0, type=int, help='lost life sets termial state')
     # algorithm & train
-    parser.add_argument('--algorithm', default='SimplePG', help='choose algorithm to train')
+    parser.add_argument('--algorithm', default='VPG', help='choose algorithm to train')
     parser.add_argument('--eposide_training', default=1000, type=int)
     parser.add_argument('--device', default=device)
     parser.add_argument('--train', default=1, type=int, help='train or evaluate') # 1:train, 0:evaluate
@@ -42,8 +43,10 @@ def run(args):
     # set algorithm, only DQN avaliable now
     if args.algorithm == 'DQN':
         algorithm = dqn
-    elif args.algorithm == 'SimplePG':
+    elif args.algorithm == 'SPG':
         algorithm = spg
+    elif args.algorithm == 'VPG':
+        algorithm = vpg
     else:
         os._exit(0)
 

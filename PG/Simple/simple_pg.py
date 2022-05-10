@@ -58,7 +58,7 @@ class TrainAgent():
 			self.env.observation_space.shape[0],
 			self.env.action_space.n,
 			args.start_action).to(self.device)
-		self.batch_size = 128
+		self.batch_size = 5
 		self.eposide_i = 0
 		self.step = 0
 		self.eposide_training = args.eposide_training
@@ -110,9 +110,9 @@ class TrainAgent():
 					len(record['state']) - len(record['eposide_reward']))
 				eposide_n += 1
 				self.eposide_i += 1
-				self._log(f'{self.eposide_i},{eposide_reward}.{self.step}\n')
+				self._log(f'{self.eposide_i},{eposide_reward},{self.step}\n')
 
-				if eposide_n > self.batch_size:
+				if eposide_n >= self.batch_size:
 					self._update_parameter(record, eposide_n)
 					break
 				else:
